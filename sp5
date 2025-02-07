@@ -1,6 +1,6 @@
-CREATE OR REPLACE PROCEDURE elt.sp_navaera_eftr_5_incoming_parties(param_load_date CHARACTER VARYING(10))
+CREATE OR REPLACE PROCEDURE elt.sp_navaera_eftr_5_incoming_parties(param_load_date VARCHAR(10))
 LANGUAGE plpgsql
-AS $_$
+AS $$
 DECLARE
     v_load_date DATE := param_load_date::DATE;
 BEGIN
@@ -47,8 +47,8 @@ BEGIN
                             || BTRIM(COALESCE(c.city::TEXT, '')) || BTRIM(COALESCE(c.prov::TEXT, '')) || BTRIM(COALESCE(c.pcode::TEXT, '')) 
                             || BTRIM(COALESCE(c.country::TEXT, '')) || BTRIM(COALESCE(c.type::TEXT, ''))), '[|. ,/#!$%^&*;:{}=_`~()-]')) = d.src_nonowners_hash_bk
         WHERE a.load_date = v_load_date
-    )
-    , start2_cte AS (
+    ),
+    start2_cte AS (
         SELECT 
             a.*, 
             va.portfolioclass,
@@ -98,12 +98,12 @@ BEGIN
         LEFT JOIN sm_transformed_insight.v_customer c ON b.part_date = c.part_date AND b.memberid = c.memberid 
         LEFT JOIN sm_transformed_insight.v_accountjoint b2 ON SUBSTRING(a.insight_date, 1, 10) = b2.part_date AND a.insight_accountid = b2.accountid 
         LEFT JOIN sm_transformed_insight.v_customer c2 ON b2.part_date = c2.part_date AND b2.memberid = c2.memberid
-    )
-    , start3_cte AS (
+    ),
+    start3_cte AS (
         SELECT *, ROW_NUMBER() OVER (PARTITION BY pswd_refno, rectype ORDER BY same DESC, led_score) AS N
         FROM start2_cte
-    )
-    , final_cte AS (
+    ),
+    final_cte AS (
         SELECT 
             load_date,
             pswd_refno,
@@ -148,35 +148,6 @@ BEGIN
             nonowner_id
         FROM start3_cte
         WHERE N = 1
-
-        UNION ALL
-
-        SELECT 
-            load_date,
-            pswd_refno,
-            insight_date,
-            insight_accountid,
-            insight_accountnum,
-            portfolioclass AS insight_portfolioclass,
-            transfer_crossborder,
-            psd_in_type,
-            rectype,
-            role_type,
-            bus_type,
-            name,
-            fi_id,
-            membernum AS insight_membernum,
-            mbrbrokernum AS insight_mbrbrokernum,
-            mem_name AS insight_membername,
-            jointtype AS insight_jointtype,
-            customertype AS insight_customertype,
-            memberclass AS insight_memberclass,
-            NULL AS same,
-            NULL AS dba,
-            NULL AS led_score,
-            nonowner_id
-        FROM start3_cte
-        WHERE N = 1 AND rectype = 'Benf_Cust'
     )
 
     -- Step 3: Inserting into the final table
@@ -186,4 +157,4 @@ BEGIN
     SELECT * FROM final_cte;
 
 END;
-$_$
+$$;
