@@ -48,7 +48,7 @@ BEGIN
                             || BTRIM(COALESCE(c.country::TEXT, '')) || BTRIM(COALESCE(c.type::TEXT, ''))), '[|. ,/#!$%^&*;:{}=_`~()-]')) = d.src_nonowners_hash_bk
         WHERE a.load_date = v_load_date
     )
-    , start2_cte AS ( -- Removed the extra comma here
+    , start2_cte AS (
         SELECT 
             a.*, 
             va.portfolioclass,
@@ -99,7 +99,6 @@ BEGIN
         LEFT JOIN sm_transformed_insight.v_accountjoint b2 ON SUBSTRING(a.insight_date, 1, 10) = b2.part_date AND a.insight_accountid = b2.accountid 
         LEFT JOIN sm_transformed_insight.v_customer c2 ON b2.part_date = c2.part_date AND b2.memberid = c2.memberid
     )
-    -- Step 2: Using additional CTEs for transformations instead of temp tables
     , start3_cte AS (
         SELECT *, ROW_NUMBER() OVER (PARTITION BY pswd_refno, rectype ORDER BY same DESC, led_score) AS N
         FROM start2_cte
@@ -149,7 +148,9 @@ BEGIN
             nonowner_id
         FROM start3_cte
         WHERE N = 1
+        
         UNION ALL
+
         SELECT 
             load_date,
             pswd_refno,
@@ -171,12 +172,13 @@ BEGIN
             customertype AS insight_customertype,
             memberclass AS insight_memberclass,
             NULL AS same,
-             NULL AS dba,
+            NULL AS dba,
             NULL AS led_score,
             nonowner_id
         FROM start3_cte
         WHERE N = 1 AND rectype = 'Benf_Cust'
     )
+
     -- Step 3: Inserting into the final table
     DELETE FROM elt.eftr_pswd_wires_incoming_parties WHERE load_date = v_load_date;
     
