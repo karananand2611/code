@@ -1,0 +1,187 @@
+CREATE OR REPLACE PROCEDURE elt.sp_navaera_eftr_5_incoming_parties(param_load_date CHARACTER VARYING(10))
+LANGUAGE plpgsql
+AS $_$
+DECLARE
+    v_load_date DATE := param_load_date::DATE;
+BEGIN
+    -- Step 1: Using CTEs to replace temporary tables
+    WITH start_cte AS (
+        SELECT 
+            a.load_date,
+            a.pswd_refno,
+            a.insight_date,
+            a.insight_accountid,
+            a.insight_accountnum,
+            b.transfer_crossborder,
+            b.psd_in_type,
+            c.rectype,
+            CASE 
+                WHEN upper(c.rectype) IN ('ORD_INST', 'ACCTWITHINST', 'INTERMEDIARYINS') THEN 'ENTITY' 
+                ELSE c.type 
+            END AS bus_type,
+            CASE 
+                WHEN rectype IN ('Benf_Cust', 'Ord_Cust') THEN regexp_replace(replace(upper(coalesce(entityname, fname || ' ' || lname)), '.', ''), '[.'',/#!$%^&*;:{}=_`~()-]')
+                ELSE regexp_replace(replace(upper(name), '.', ''), '[.'',/#!$%^&*;:{}=_`~()-]') 
+            END AS name,
+            CASE 
+                WHEN rectype IN ('AcctWithInst', 'Ord_Inst', 'InterMediaryIns') THEN fiid 
+                ELSE NULL 
+            END AS fi_id,
+            CASE 
+                WHEN upper(rectype) = 'ORD_CUST' THEN 'Requester'
+                WHEN upper(rectype) = 'BENF_CUST' THEN 'Beneficiary'
+                WHEN upper(rectype) = 'ORD_INST' THEN 'Initiator'
+                WHEN upper(rectype) = 'ACCTWITHINST' THEN 'Receiver'
+                WHEN upper(rectype) = 'INTERMEDIARYINS' THEN 'Involvements inside completing action'
+                ELSE NULL 
+            END AS role_type,
+            a.eftr_exclusion,
+            d.ea_nonowner_id
+        FROM elt.eftr_pswd_wires_incoming_transfers a
+        LEFT JOIN elt.eftr_pswd_wires_metric b ON a.pswd_refno = b.pswd_refno
+        LEFT JOIN elt.eftr_pswd_wires_by_rectype c ON a.pswd_refno = c.pswd_refno AND upper(c.rectype) IN ('BENF_CUST', 'ORD_CUST', 'ORD_INST', 'ACCTWITHINST', 'INTERMEDIARYINS')
+        LEFT JOIN elt.fcrm_non_owner_party_info d 
+            ON upper(c.rectype) = 'ORD_CUST' 
+            AND MD5(REGEXP_REPLACE(UPPER(BTRIM(COALESCE(c.entityname::TEXT, '') || BTRIM(COALESCE(c.fname::TEXT, '')) || BTRIM(COALESCE(c.lname::TEXT, '')) 
+                            || BTRIM(COALESCE(c.mname::TEXT, '')) || BTRIM(COALESCE(c.line::TEXT, '')) || BTRIM(COALESCE(c.street::TEXT, '')) 
+                            || BTRIM(COALESCE(c.city::TEXT, '')) || BTRIM(COALESCE(c.prov::TEXT, '')) || BTRIM(COALESCE(c.pcode::TEXT, '')) 
+                            || BTRIM(COALESCE(c.country::TEXT, '')) || BTRIM(COALESCE(c.type::TEXT, ''))), '[|. ,/#!$%^&*;:{}=_`~()-]')) = d.src_nonowners_hash_bk
+        WHERE a.load_date = v_load_date
+    )
+    , start2_cte AS ( -- Removed the extra comma here
+        SELECT 
+            a.*, 
+            va.portfolioclass,
+            TRIM(REPLACE(UPPER(va.portfolioname), 'DBA ', '')) AS portfolioname,
+            TRIM(REPLACE(UPPER(va.portfoliotradename), 'DBA ', '')) AS portfoliotradename,
+            CASE 
+                WHEN rectype = 'Benf_Cust' THEN COALESCE(c.membernum, c2.membernum) 
+                ELSE NULL 
+            END AS membernum,
+            CASE 
+                WHEN rectype = 'Benf_Cust' THEN COALESCE(c.mbrbrokernum, c2.mbrbrokernum) 
+                ELSE NULL 
+            END AS mbrbrokernum,
+            UPPER(CASE 
+                WHEN rectype = 'Benf_Cust' THEN regexp_replace(COALESCE(c.fullname, c2.fullname), '[|.'',/#!$%^&*;:{}=_`~()-]')
+                ELSE NULL 
+            END) AS mem_name,
+            LENGTH(COALESCE(c.fullname, c2.fullname)) - LENGTH(REPLACE(COALESCE(c.fullname, c2.fullname), ' ', '')) + 1 AS num_word,
+            CASE 
+                WHEN rectype = 'Benf_Cust' THEN COALESCE(b.jointtype, b2.jointtype) 
+                ELSE NULL 
+            END AS jointtype,
+            CASE 
+                WHEN rectype = 'Benf_Cust' THEN COALESCE(c.customertype, c2.customertype) 
+                ELSE NULL 
+            END AS customertype,
+            CASE 
+                WHEN rectype = 'Benf_Cust' THEN COALESCE(c.memberclass, c2.memberclass) 
+                ELSE NULL 
+            END AS memberclass,
+            CASE 
+                WHEN role_type = 'Beneficiary' AND STRPOS(UPPER(name), ' AND ') > 0 AND va.portfolioclass = 'Personal' THEN 1
+                ELSE 0 
+            END AS JointBenf,
+            CASE 
+                WHEN role_type = 'Beneficiary' AND STRPOS(UPPER(name), '|') > 0 AND va.portfolioclass = 'Personal' THEN 1
+                ELSE 0 
+            END AS LastFirstBenf,
+            CASE 
+                WHEN name = TRIM(REPLACE(UPPER(va.portfolioname), 'DBA ', '')) THEN 1
+                WHEN name = TRIM(REPLACE(UPPER(va.portfoliotradename), 'DBA ', '')) THEN 1
+                ELSE 0 
+            END AS dba
+        FROM start_cte a
+        LEFT JOIN sm_transformed_insight.v_account va ON SUBSTRING(a.insight_date, 1, 10) = va.part_date AND a.insight_accountnum = va.accountnum AND va.category = 'Deposit'
+        LEFT JOIN sm_transformed_insight.v_accountjoint b ON va.part_date = b.part_date AND va.accountid = b.accountid 
+        LEFT JOIN sm_transformed_insight.v_customer c ON b.part_date = c.part_date AND b.memberid = c.memberid 
+        LEFT JOIN sm_transformed_insight.v_accountjoint b2 ON SUBSTRING(a.insight_date, 1, 10) = b2.part_date AND a.insight_accountid = b2.accountid 
+        LEFT JOIN sm_transformed_insight.v_customer c2 ON b2.part_date = c2.part_date AND b2.memberid = c2.memberid
+    )
+    -- Step 2: Using additional CTEs for transformations instead of temp tables
+    , start3_cte AS (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY pswd_refno, rectype ORDER BY same DESC, led_score) AS N
+        FROM start2_cte
+    )
+    , final_cte AS (
+        SELECT 
+            load_date,
+            pswd_refno,
+            insight_date,
+            insight_accountid,
+            insight_accountnum,
+            portfolioclass AS insight_portfolioclass,
+            transfer_crossborder,
+            psd_in_type,
+            rectype,
+            role_type,
+            bus_type,
+            name,
+            fi_id,
+            CASE 
+                WHEN same = 0 AND dba = 1 THEN NULL 
+                ELSE membernum 
+            END AS insight_membernum,
+            CASE 
+                WHEN same = 0 AND dba = 1 THEN NULL 
+                ELSE mbrbrokernum 
+            END AS insight_mbrbrokernum,
+            CASE 
+                WHEN same = 0 AND dba = 1 THEN NULL 
+                ELSE mem_name 
+            END AS insight_membername,
+            CASE 
+                WHEN same = 0 AND dba = 1 THEN NULL 
+                ELSE jointtype 
+            END AS insight_jointtype,
+            CASE 
+                WHEN same = 0 AND dba = 1 THEN NULL 
+                ELSE customertype 
+            END AS insight_customertype,
+            CASE 
+                WHEN same = 0 AND dba = 1 THEN NULL 
+                ELSE memberclass 
+            END AS insight_memberclass,
+            same,
+            dba,
+            led_score,
+            nonowner_id
+        FROM start3_cte
+        WHERE N = 1
+        UNION ALL
+        SELECT 
+            load_date,
+            pswd_refno,
+            insight_date,
+            insight_accountid,
+            insight_accountnum,
+            portfolioclass AS insight_portfolioclass,
+            transfer_crossborder,
+            psd_in_type,
+            rectype,
+            role_type,
+            bus_type,
+            name,
+            fi_id,
+            membernum AS insight_membernum,
+            mbrbrokernum AS insight_mbrbrokernum,
+            mem_name AS insight_membername,
+            jointtype AS insight_jointtype,
+            customertype AS insight_customertype,
+            memberclass AS insight_memberclass,
+            NULL AS same,
+             NULL AS dba,
+            NULL AS led_score,
+            nonowner_id
+        FROM start3_cte
+        WHERE N = 1 AND rectype = 'Benf_Cust'
+    )
+    -- Step 3: Inserting into the final table
+    DELETE FROM elt.eftr_pswd_wires_incoming_parties WHERE load_date = v_load_date;
+    
+    INSERT INTO elt.eftr_pswd_wires_incoming_parties
+    SELECT * FROM final_cte;
+
+END;
+$_$
