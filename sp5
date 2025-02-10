@@ -311,10 +311,36 @@ BEGIN
     final_data AS (
         SELECT
             'Incoming' AS transfer_type,
-            sa.*,
+            sa.load_date,
+            sa.pswd_refno,
+            sa.insight_date,
+            sa.insight_accountid,
+            sa.insight_accountnum,
+            sa.transfer_crossborder,
+            sa.psd_in_type,
+            sa.rectype,
+            sa.bus_type,
+            sa.name,
+            sa.fi_id,
+            sa.role_type,
+            sa.eftr_exclusion,
+            sa.ea_nonowner_id,
+            sa.portfolioclass,
+            sa.portfolioname,
+            sa.portfoliotradename,
+            sa.membernum,
+            sa.mbrbrokernum,
+            sa.mem_name,
+            sa.jointtype,
+            sa.customertype,
+            sa.memberclass,
+            sa.JointBenf,
+            sa.LastFirstBenf,
+            sa.dba,
+            sa.same,
             CASE
-                WHEN sa.role_type IN ('Initiator', 'Receiver', 'InterMediaryIns') THEN sa.bus_type
-                WHEN sa.memberclass LIKE 'Personal%' THEN 'INDIVIDUAL' -- Use memberclass from auth_data
+                WHEN sa.role_type IN ('Initiator', 'Receiver', 'InterMediaryIns')THEN sa.bus_type
+                WHEN sa.memberclass LIKE 'Personal%' THEN 'INDIVIDUAL'
                 ELSE sa.bus_type
             END AS pswd_bus_type,
             m.mdm_id,
@@ -335,15 +361,16 @@ BEGIN
                 WHEN sa.role_type = 'Receiver' THEN 0
                 WHEN sa.role_type = 'InterMediaryIns' THEN 0
                 ELSE NULL
-            END AS sub_record_type
+            END AS sub_record_type,
+            NULL::int AS led_score -- Add missing column
         FROM (
             SELECT
                 sd.*,
-                ad.customertype AS insight_customertype,  -- Get insight_customertype from auth_data
+                ad.customertype AS insight_customertype,
                 ROW_NUMBER() OVER (PARTITION BY sd.pswd_refno, sd.rectype ORDER BY sd.same DESC, sd.led_score) AS N
             FROM
                 same_data sd
-                LEFT JOIN auth_data ad ON sd.pswd_refno = ad.pswd_refno -- Join same_data with auth_data
+                LEFT JOIN auth_data ad ON sd.pswd_refno = ad.pswd_refno
         ) sa
         LEFT JOIN ean_mdm.mv_mdm_customer360_current_view m ON
             CASE
@@ -355,23 +382,50 @@ BEGIN
         UNION ALL
         SELECT
             'Incoming' AS transfer_type,
-            ad.*,
+            ad.load_date,
+            ad.pswd_refno,
+            ad.insight_date,
+            ad.insight_accountid,
+            ad.insight_accountnum,
+            ad.transfer_crossborder,
+            ad.psd_in_type,
+            ad.rectype,
+            ad.bus_type,
+            ad.name,
+            ad.fi_id,
+            ad.role_type,
+            NULL::varchar(10) AS eftr_exclusion, -- Add missing column
+            NULL::varchar(20) AS ea_nonowner_id, -- Add missing column
+            ad.portfolioclass,
+            NULL::varchar(255) AS portfolioname, -- Add missing column
+            NULL::varchar(255) AS portfoliotradename, -- Add missing column
+            ad.membernum,
+            ad.mbrbrokernum,
+            ad.mem_name,
+            ad.jointtype,
+            ad.customertype,
+            ad.memberclass,
+            NULL::int AS JointBenf, -- Add missing column
+            NULL::int AS LastFirstBenf, -- Add missing column
+            NULL::int AS dba, -- Add missing column
+            ad.same,
             CASE
                 WHEN ad.role_type IN ('Initiator', 'Receiver', 'InterMediaryIns') THEN ad.bus_type
                 WHEN ad.memberclass LIKE 'Personal%' THEN 'INDIVIDUAL'
                 ELSE ad.bus_type
             END AS pswd_bus_type,
-            NULL AS mdm_id,  -- No mdm_id for 'Auth' records
+            NULL::varchar(255) AS mdm_id, -- Add missing column
             2 AS action_type_id,
             1 AS action_id,
             CASE
-                WHEN ad.role_type = 'Auth' THEN 5  -- Assuming 'Auth' maps to record_type 5
+                WHEN ad.role_type = 'Auth' THEN 5
                 ELSE NULL
             END AS record_type,
             CASE
-                WHEN ad.role_type = 'Auth' THEN 0  -- Assuming 'Auth' maps to sub_record_type 0
+                WHEN ad.role_type = 'Auth' THEN 0
                 ELSE NULL
-            END AS sub_record_type
+            END AS sub_record_type,
+            NULL::int AS led_score -- Add missing column
         FROM
             auth_data ad
     ),
