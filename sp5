@@ -313,10 +313,9 @@ BEGIN
         FROM (
             SELECT
                 sd.*,
-                ROW_NUMBER() OVER (PARTITION BY sd.pswd_refno, sd.rectype ORDER BY sd.same DESC, sd.led_score) AS N 
-FROM
+                ROW_NUMBER() OVER (PARTITION BY sd.pswd_refno, sd.rectype ORDER BY sd.same DESC, sd.led_score) AS N
+            FROM
                 same_data sd
-                LEFT JOIN auth_data ad ON sd.pswd_refno = ad.pswd_refno
         ) sa
         LEFT JOIN ean_mdm.mv_mdm_customer360_current_view m ON
             CASE
