@@ -113,8 +113,8 @@ BEGIN
         SELECT
             ac.*,
             CASE
-                WHEN array_length(regexp_split_to_array(ac.name, ' AND '), 1) > 1 THEN
-                    (regexp_split_to_array(ac.name, ' AND ')) || ' ' || reverse((regexp_split_to_array(reverse(ac.name), ' AND ')))
+                WHEN split_part(ac.name, '|', 1) <> '' AND split_part(ac.name, '|', 2) <> '' THEN
+                    split_part(ac.name, '|', 2) || ' ' || split_part(ac.name, '|', 1)
                 ELSE
                     ac.name
             END AS name_updated
@@ -128,8 +128,8 @@ BEGIN
         SELECT
             ac.*,
             CASE
-                WHEN array_length(regexp_split_to_array(ac.name, ' AND '), 1) > 1 THEN
-                    (regexp_split_to_array(ac.name, ' AND ')) || ' ' || reverse((regexp_split_to_array(reverse(ac.name), ' AND ')))
+                WHEN split_part(ac.name, ' AND ', 1) <> '' AND split_part(ac.name, ' AND ', 2) <> '' THEN
+                    split_part(ac.name, ' AND ', 1) || ' ' || reverse(split_part(reverse(ac.name), ' AND ', 1))
                 ELSE
                     ac.name
             END AS name_updated
@@ -142,9 +142,63 @@ BEGIN
     combined_data AS (
         SELECT * FROM account_customer_data WHERE JointBenf = 0 AND LastFirstBenf = 0
         UNION ALL
-        SELECT * FROM last_first_benf_data
+        SELECT
+            load_date,
+            pswd_refno,
+            insight_date,
+            insight_accountid,
+            insight_accountnum,
+            transfer_crossborder,
+            psd_in_type,
+            rectype,
+            bus_type,
+            name_updated as name, -- Use the updated name
+            fi_id,
+            role_type,
+            eftr_exclusion,
+            ea_nonowner_id,
+            portfolioclass,
+            portfolioname,
+            portfoliotradename,
+            membernum,
+            mbrbrokernum,
+            mem_name,
+            jointtype,
+            customertype,
+            memberclass,
+            jointbenf,
+            lastfirstbenf,
+            dba
+        FROM last_first_benf_data
         UNION ALL
-        SELECT * FROM joint_benf_data
+        SELECT
+            load_date,
+            pswd_refno,
+            insight_date,
+            insight_accountid,
+            insight_accountnum,
+            transfer_crossborder,
+            psd_in_type,
+            rectype,
+            bus_type,
+            name_updated as name, -- Use the updated name
+            fi_id,
+            role_type,
+            eftr_exclusion,
+            ea_nonowner_id,
+            portfolioclass,
+            portfolioname,
+            portfoliotradename,
+            membernum,
+            mbrbrokernum,
+            mem_name,
+            jointtype,
+            customertype,
+            memberclass,
+            jointbenf,
+            lastfirstbenf,
+            dba
+        FROM joint_benf_data
     ),
     -- Calculate 'same' flag within a single CTE
     same_data AS (
@@ -171,15 +225,16 @@ BEGIN
                     ELSE cd.mem_name
                 END AS mem_name2,
                 CASE
-                    WHEN array_length(regexp_split_to_array(cd.mem_name, ' '), 1) > 2 THEN
-                        (regexp_split_to_array(cd.mem_name, ' ')) || ' ' || reverse((regexp_split_to_array(reverse(cd.mem_name), ' ')))
+                    WHEN split_part(cd.mem_name, ' ', 1) <> '' AND split_part(cd.mem_name, ' ', 2) <> ''
+                         AND split_part(cd.mem_name, ' ', 3) <> '' THEN
+                        split_part(cd.mem_name, ' ', 1) || ' ' || reverse(split_part(reverse(cd.mem_name), ' ', 1))
                     ELSE
                         cd.mem_name
                 END AS mem_name3,
                 REPLACE(cd.mem_name, ' ', '') AS mem_name4,
                 CASE
                     WHEN strpos(cd.mem_name, ' ') > 0 THEN
-                        reverse((regexp_split_to_array(reverse(TRIM(cd.mem_name)), ' '))) || ' ' || (regexp_split_to_array(TRIM(cd.mem_name), ' '))
+                        reverse(split_part(reverse(TRIM(cd.mem_name)), ' ', 1)) || ' ' || split_part(TRIM(cd.mem_name), ' ', 1)
                     ELSE
                         cd.mem_name
                 END AS mem_name5,
@@ -190,20 +245,22 @@ BEGIN
                     ELSE cd.name
                 END AS name2,
                 CASE
-                    WHEN array_length(regexp_split_to_array(cd.name, ' '), 1) > 2 THEN
-                        (regexp_split_to_array(cd.name, ' ')) || ' ' || reverse((regexp_split_to_array(reverse(cd.name), ' ')))
+                    WHEN split_part(cd.name, ' ', 1) <> '' AND split_part(cd.name, ' ', 2) <> ''
+                         AND split_part(cd.name, ' ', 3) <> '' THEN
+                        split_part(cd.name, ' ', 1) || ' ' || reverse(split_part(reverse(cd.name), ' ', 1))
                     ELSE
                         cd.name
                 END AS name3,
                 REPLACE(cd.name, ' ', '') AS name4,
                 CASE
                     WHEN strpos(TRIM(cd.name), ' ') > 0 THEN
-                        reverse((regexp_split_to_array(reverse(TRIM(cd.name)), ' '))) || ' ' || (regexp_split_to_array(TRIM(cd.name), ' '))
+                        reverse(split_part(reverse(TRIM(cd.name)), ' ', 1)) || ' ' || split_part(TRIM(cd.name), ' ', 1)
                     ELSE TRIM(cd.name)
                 END AS name5,
                 CASE
-                    WHEN cd.role_type = 'Beneficiary' AND cd.portfolioclass LIKE 'Personal' AND array_length(regexp_split_to_array(cd.name, ' '), 1) >= 2 THEN
-                        TRIM((regexp_split_to_array(cd.name, ' ')) || ' ' || (regexp_split_to_array(cd.name, ' ')))
+                    WHEN cd.role_type = 'Beneficiary' AND cd.portfolioclass LIKE 'Personal'
+                         AND split_part(cd.name, ' ', 1) <> '' AND split_part(cd.name, ' ', 2) <> '' THEN
+                        TRIM(split_part(cd.name, ' ', 2) || ' ' || split_part(cd.name, ' ', 1))
                     ELSE
                         cd.name
                 END AS name6,
@@ -273,7 +330,7 @@ BEGIN
             END AS record_type,
             CASE
                 WHEN sa.role_type = 'Requester' THEN 0
-                WHEN sa.role_type = 'Beneficiary' THEN 0
+WHEN sa.role_type = 'Beneficiary' THEN 0
                 WHEN sa.role_type = 'Initiator' THEN 0
                 WHEN sa.role_type = 'Receiver' THEN 0
                 WHEN sa.role_type = 'InterMediaryIns' THEN 0
@@ -286,7 +343,7 @@ BEGIN
             FROM
                 same_data sd
         ) sa
-LEFT JOIN ean_mdm.mv_mdm_customer360_current_view m ON
+        LEFT JOIN ean_mdm.mv_mdm_customer360_current_view m ON
             CASE
                 WHEN sa.insight_customertype IN ('Client Named (Agency)', 'Nominee (Agency)', 'NonOwner') THEN sa.insight_mbrbrokernum
                 ELSE sa.insight_membernum
