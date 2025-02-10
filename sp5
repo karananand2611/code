@@ -141,63 +141,9 @@ BEGIN
     combined_data AS (
         SELECT * FROM account_customer_data WHERE JointBenf = 0 AND LastFirstBenf = 0
         UNION ALL
-        SELECT
-            load_date,
-            pswd_refno,
-            insight_date,
-            insight_accountid,
-            insight_accountnum,
-            transfer_crossborder,
-            psd_in_type,
-            rectype,
-            bus_type,
-            name_updated as name,
-            fi_id,
-            role_type,
-            eftr_exclusion,
-            ea_nonowner_id,
-            portfolioclass,
-            portfolioname,
-            portfoliotradename,
-            membernum,
-            mbrbrokernum,
-            mem_name,
-            jointtype,
-            customertype,
-            memberclass,
-            jointbenf,
-            lastfirstbenf,
-            dba
-        FROM last_first_benf_data
+        SELECT * FROM last_first_benf_data
         UNION ALL
-        SELECT
-            load_date,
-            pswd_refno,
-            insight_date,
-            insight_accountid,
-            insight_accountnum,
-            transfer_crossborder,
-            psd_in_type,
-            rectype,
-            bus_type,
-            name_updated as name,
-            fi_id,
-            role_type,
-            eftr_exclusion,
-            ea_nonowner_id,
-            portfolioclass,
-            portfolioname,
-            portfoliotradename,
-            membernum,
-            mbrbrokernum,
-            mem_name,
-            jointtype,
-            customertype,
-            memberclass,
-            jointbenf,
-            lastfirstbenf,
-            dba
-        FROM joint_benf_data
+        SELECT * FROM joint_benf_data
     ),
     -- Calculate 'same' flag within a single CTE
     same_data AS (
@@ -343,7 +289,7 @@ BEGIN
                 WHEN sa.memberclass LIKE 'Personal%' THEN 'INDIVIDUAL'
                 ELSE sa.bus_type
             END AS pswd_bus_type,
-            m.mdm_id,
+            m.mdm_id::varchar(255),
             2 AS action_type_id,
             1 AS action_id,
             CASE
