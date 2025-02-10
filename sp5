@@ -362,7 +362,7 @@ BEGIN
                 WHEN sa.role_type = 'InterMediaryIns' THEN 0
                 ELSE NULL
             END AS sub_record_type,
-            NULL::int AS led_score -- Add missing column
+            NULL AS led_score -- Add missing column
         FROM (
             SELECT
                 sd.*,
