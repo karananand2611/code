@@ -78,12 +78,12 @@ BEGIN
             va.portfolioclass,
             TRIM(REPLACE(UPPER(va.portfolioname), 'DBA ', '')) AS portfolioname,
             TRIM(REPLACE(UPPER(va.portfoliotradename), 'DBA ', '')) AS portfoliotradename,
-            COALESCE(c.membernum, c2.membernum) AS membernum,
-            COALESCE(c.mbrbrokernum, c2.mbrbrokernum) AS mbrbrokernum,
-            UPPER(COALESCE(c.fullname, c2.fullname)) AS mem_name,
+            COALESCE(cust.membernum, cust2.membernum) AS membernum,
+            COALESCE(cust.mbrbrokernum, cust2.mbrbrokernum) AS mbrbrokernum,
+            UPPER(COALESCE(cust.fullname, cust2.fullname)) AS mem_name,
             COALESCE(b.jointtype, b2.jointtype) AS jointtype,
-            COALESCE(c.customertype, c2.customertype) AS customertype,
-            COALESCE(c.memberclass, c2.memberclass) AS memberclass,
+            COALESCE(cust.customertype, cust2.customertype) AS customertype,
+            COALESCE(cust.memberclass, cust2.memberclass) AS memberclass,
             CASE
                 WHEN s.role_type = 'Beneficiary' AND strpos(UPPER(s.name), ' AND ') > 0 AND va.portfolioclass = 'Personal' THEN 1
                 ELSE 0
@@ -102,10 +102,10 @@ BEGIN
             LEFT JOIN sm_transformed_insight.v_account va ON substring(s.insight_date, 1, 10) = va.part_date
                 AND s.insight_accountnum = va.accountnum AND va.category = 'Deposit'
             LEFT JOIN sm_transformed_insight.v_accountjoint b ON va.part_date = b.part_date AND va.accountid = b.accountid
-            LEFT JOIN sm_transformed_insight.v_customer c ON b.part_date = c.part_date AND b.memberid = c.memberid
+            LEFT JOIN sm_transformed_insight.v_customer cust ON b.part_date = cust.part_date AND b.memberid = cust.memberid
             LEFT JOIN sm_transformed_insight.v_accountjoint b2 ON substring(s.insight_date, 1, 10) = b2.part_date
                 AND s.insight_accountid = b2.accountid
-            LEFT JOIN sm_transformed_insight.v_customer c2 ON b2.part_date = c2.part_date AND b2.memberid = c2.memberid
+            LEFT JOIN sm_transformed_insight.v_customer cust2 ON b2.part_date = cust2.part_date AND b2.memberid = cust2.memberid
     ),
     -- Handle LastFirstBenf cases within a single CTE
     last_first_benf_data AS (
@@ -306,14 +306,15 @@ BEGIN
         WHERE
             upper(sd.rectype) = 'BENF_CUST'
     ),
-    -- Combine 'same' and 'auth' data into a single CTE
+    -- Now we can combine same_data and auth_data
+    -- since auth_data contains insight_customertype
     final_data AS (
         SELECT
             'Incoming' AS transfer_type,
             sa.*,
             CASE
                 WHEN sa.role_type IN ('Initiator', 'Receiver', 'InterMediaryIns') THEN sa.bus_type
-                WHEN sa.insight_memberclass LIKE 'Personal%' THEN 'INDIVIDUAL'
+                WHEN sa.memberclass LIKE 'Personal%' THEN 'INDIVIDUAL' -- Use memberclass from auth_data
                 ELSE sa.bus_type
             END AS pswd_bus_type,
             m.mdm_id,
@@ -338,16 +339,16 @@ BEGIN
         FROM (
             SELECT
                 sd.*,
-                ROW_NUMBER() OVER (PARTITION BY sd.pswd_refno, sd.rectype ORDER BY sd.same DESC, sd.led_score) AS N,
-                acd.insight_customertype -- Include insight_customertype
+                ad.customertype AS insight_customertype,  -- Get insight_customertype from auth_data
+                ROW_NUMBER() OVER (PARTITION BY sd.pswd_refno, sd.rectype ORDER BY sd.same DESC, sd.led_score) AS N
             FROM
                 same_data sd
-                LEFT JOIN account_customer_data acd ON sd.pswd_refno = acd.pswd_refno AND sd.rectype = acd.rectype  -- Join to get insight_customertype
+                LEFT JOIN auth_data ad ON sd.pswd_refno = ad.pswd_refno -- Join same_data with auth_data
         ) sa
         LEFT JOIN ean_mdm.mv_mdm_customer360_current_view m ON
             CASE
-                WHEN sa.insight_customertype IN ('Client Named (Agency)', 'Nominee (Agency)', 'NonOwner') THEN sa.insight_mbrbrokernum
-                ELSE sa.insight_membernum
+                WHEN sa.insight_customertype IN ('Client Named (Agency)', 'Nominee (Agency)', 'NonOwner') THEN sa.mbrbrokernum
+                ELSE sa.membernum
             END = m.t24_profile_num
         WHERE
             sa.N = 1
