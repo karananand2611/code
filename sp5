@@ -20,7 +20,6 @@ BEGIN
                 WHEN upper(c.rectype) IN ('ORD_INST','ACCTWITHINST', 'INTERMEDIARYINS') THEN 'ENTITY'
                 ELSE c.type
             END bus_type,
-            -- Simplified string manipulation
             CASE
                 WHEN c.rectype IN ('Benf_Cust','Ord_Cust') THEN
                     REGEXP_REPLACE(
@@ -152,7 +151,7 @@ BEGIN
             psd_in_type,
             rectype,
             bus_type,
-            name_updated as name, -- Use the updated name
+            name_updated as name,
             fi_id,
             role_type,
             eftr_exclusion,
@@ -181,7 +180,7 @@ BEGIN
             psd_in_type,
             rectype,
             bus_type,
-            name_updated as name, -- Use the updated name
+            name_updated as name,
             fi_id,
             role_type,
             eftr_exclusion,
@@ -330,7 +329,7 @@ BEGIN
             END AS record_type,
             CASE
                 WHEN sa.role_type = 'Requester' THEN 0
-WHEN sa.role_type = 'Beneficiary' THEN 0
+                WHEN sa.role_type = 'Beneficiary' THEN 0
                 WHEN sa.role_type = 'Initiator' THEN 0
                 WHEN sa.role_type = 'Receiver' THEN 0
                 WHEN sa.role_type = 'InterMediaryIns' THEN 0
@@ -339,9 +338,11 @@ WHEN sa.role_type = 'Beneficiary' THEN 0
         FROM (
             SELECT
                 sd.*,
-                ROW_NUMBER() OVER (PARTITION BY sd.pswd_refno, sd.rectype ORDER BY sd.same DESC, sd.led_score) AS N
+                ROW_NUMBER() OVER (PARTITION BY sd.pswd_refno, sd.rectype ORDER BY sd.same DESC, sd.led_score) AS N,
+                acd.insight_customertype -- Include insight_customertype
             FROM
                 same_data sd
+                LEFT JOIN account_customer_data acd ON sd.pswd_refno = acd.pswd_refno AND sd.rectype = acd.rectype  -- Join to get insight_customertype
         ) sa
         LEFT JOIN ean_mdm.mv_mdm_customer360_current_view m ON
             CASE
