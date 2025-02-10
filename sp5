@@ -289,7 +289,7 @@ BEGIN
                 WHEN sa.memberclass LIKE 'Personal%' THEN 'INDIVIDUAL'
                 ELSE sa.bus_type
             END AS pswd_bus_type,
-            m.mdm_id::varchar(255),
+            m.mdm_id,
             2 AS action_type_id,
             1 AS action_id,
             CASE
@@ -308,19 +308,19 @@ BEGIN
                 WHEN sa.role_type = 'InterMediaryIns' THEN 0
                 ELSE NULL
             END AS sub_record_type,
-            NULL AS led_score -- Add missing column
+            NULL AS led_score, -- Add missing column
+            NULL AS insight_customertype -- Add missing column
         FROM (
             SELECT
                 sd.*,
-                ad.customertype AS insight_customertype,
-                ROW_NUMBER() OVER (PARTITION BY sd.pswd_refno, sd.rectype ORDER BY sd.same DESC, sd.led_score) AS N
-            FROM
+                ROW_NUMBER() OVER (PARTITION BY sd.pswd_refno, sd.rectype ORDER BY sd.same DESC, sd.led_score) AS N 
+FROM
                 same_data sd
                 LEFT JOIN auth_data ad ON sd.pswd_refno = ad.pswd_refno
         ) sa
         LEFT JOIN ean_mdm.mv_mdm_customer360_current_view m ON
             CASE
-                WHEN sa.insight_customertype IN ('Client Named (Agency)', 'Nominee (Agency)', 'NonOwner') THEN sa.mbrbrokernum
+                WHEN sa.customertype IN ('Client Named (Agency)', 'Nominee (Agency)', 'NonOwner') THEN sa.mbrbrokernum
                 ELSE sa.membernum
             END = m.t24_profile_num
         WHERE
@@ -371,7 +371,8 @@ BEGIN
                 WHEN ad.role_type = 'Auth' THEN 0
                 ELSE NULL
             END AS sub_record_type,
-            NULL AS led_score -- Add missing column
+            NULL AS led_score, -- Add missing column
+            NULL AS insight_customertype -- Add missing column
         FROM
             auth_data ad
     ),
