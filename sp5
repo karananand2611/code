@@ -339,7 +339,7 @@ BEGIN
             sa.dba,
             sa.same,
             CASE
-                WHEN sa.role_type IN ('Initiator', 'Receiver', 'InterMediaryIns')THEN sa.bus_type
+                WHEN sa.role_type IN ('Initiator', 'Receiver', 'InterMediaryIns') THEN sa.bus_type
                 WHEN sa.memberclass LIKE 'Personal%' THEN 'INDIVIDUAL'
                 ELSE sa.bus_type
             END AS pswd_bus_type,
@@ -394,27 +394,27 @@ BEGIN
             ad.name,
             ad.fi_id,
             ad.role_type,
-            NULL::varchar(10) AS eftr_exclusion, -- Add missing column
-            NULL::varchar(20) AS ea_nonowner_id, -- Add missing column
+            NULL AS eftr_exclusion, -- Add missing column
+            NULL AS ea_nonowner_id, -- Add missing column
             ad.portfolioclass,
-            NULL::varchar(255) AS portfolioname, -- Add missing column
-            NULL::varchar(255) AS portfoliotradename, -- Add missing column
+            NULL AS portfolioname, -- Add missing column
+            NULL AS portfoliotradename, -- Add missing column
             ad.membernum,
             ad.mbrbrokernum,
             ad.mem_name,
             ad.jointtype,
             ad.customertype,
             ad.memberclass,
-            NULL::int AS JointBenf, -- Add missing column
-            NULL::int AS LastFirstBenf, -- Add missing column
-            NULL::int AS dba, -- Add missing column
+            NULL AS JointBenf, -- Add missing column
+            NULL AS LastFirstBenf, -- Add missing column
+            NULL AS dba, -- Add missing column
             ad.same,
             CASE
                 WHEN ad.role_type IN ('Initiator', 'Receiver', 'InterMediaryIns') THEN ad.bus_type
                 WHEN ad.memberclass LIKE 'Personal%' THEN 'INDIVIDUAL'
                 ELSE ad.bus_type
             END AS pswd_bus_type,
-            NULL::varchar(255) AS mdm_id, -- Add missing column
+            NULL AS mdm_id, -- Add missing column
             2 AS action_type_id,
             1 AS action_id,
             CASE
@@ -425,7 +425,7 @@ BEGIN
                 WHEN ad.role_type = 'Auth' THEN 0
                 ELSE NULL
             END AS sub_record_type,
-            NULL::int AS led_score -- Add missing column
+            NULL AS led_score -- Add missing column
         FROM
             auth_data ad
     ),
